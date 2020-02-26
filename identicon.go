@@ -25,7 +25,6 @@ type gridPoint struct {
 }
 
 type Identicon struct {
-	Name       string
 	hash       [16]byte
 	color      [3]byte
 	grid       []byte
@@ -33,13 +32,26 @@ type Identicon struct {
 	pixelMap   []drawingPoint
 }
 
-// WriteTo writes the identicon image to the given writer
-func (i Identicon) WriteImage(w io.Writer) error {
-	var img = image.NewRGBA(image.Rect(0, 0, 250, 250))
-	col := color.RGBA{R: i.color[0], G: i.color[1], B: i.color[2], A: 255}
+type LightBackground bool
+
+// WritePNGImage writes the identicon image to the given writer with width and height of 5 times pixwidth
+// and LightBackground(true) or LightBackground(false) as lbg
+func (i Identicon) WritePNGImage(w io.Writer, pixwidth int, lbg LightBackground) error {
+	var img = image.NewRGBA(image.Rect(0, 0, pixwidth*5, pixwidth*5))
+	var col color.RGBA
+	if bool(lbg) {
+		col = color.RGBA{R: i.color[0] & 0x8f, G: i.color[1] & 0x8f, B: i.color[2] & 0x8f, A: 255}
+	} else {
+		col = color.RGBA{R: i.color[0] | 0x80, G: i.color[1] | 0x80, B: i.color[2] | 0x80, A: 255}
+	}
 
 	for _, pixel := range i.pixelMap {
-		rect(img, col, float64(pixel.topLeft.x), float64(pixel.topLeft.y), float64(pixel.bottomRight.x), float64(pixel.bottomRight.y))
+		rect(
+			img, 
+			col, 
+			float64(pixel.topLeft.x * pixwidth), float64(pixel.topLeft.y * pixwidth), 
+			float64(pixel.bottomRight.x* pixwidth), float64(pixel.bottomRight.y* pixwidth),
+		)
 	}
 
 	return png.Encode(w, img)
@@ -47,6 +59,8 @@ func (i Identicon) WriteImage(w io.Writer) error {
 
 type applyFunc func(Identicon) Identicon
 
+// Generate creates an Identicon from an arbitrary byte array.
+// It is garanteed that the same byte array produces the same Identicon.
 func Generate(input []byte) Identicon {
 	identiconPipe := []applyFunc{
 		pickColor, buildGrid, filterOddSquares, buildPixelMap,
@@ -61,7 +75,6 @@ func Generate(input []byte) Identicon {
 func hashInput(input []byte) Identicon {
 	checkSum := md5.Sum(input)
 	return Identicon{
-		Name: string(input),
 		hash: checkSum,
 	}
 }
@@ -119,10 +132,10 @@ func buildPixelMap(identicon Identicon) Identicon {
 	var drawingPoints []drawingPoint
 
 	pixelFunc := func(p gridPoint) drawingPoint {
-		horizontal := (p.index % 5) * 50
-		vertical := (p.index / 5) * 50
+		horizontal := (p.index % 5)
+		vertical := (p.index / 5)
 		topLeft := point{x: horizontal, y: vertical}
-		bottomRight := point{x: horizontal + 50, y: vertical + 50}
+		bottomRight := point{x: horizontal + 1, y: vertical + 1}
 
 		return drawingPoint{
 			topLeft,

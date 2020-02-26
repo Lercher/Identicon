@@ -1,4 +1,4 @@
-module github.com/barthr/identicon
+module github.com/lercher/identicon
 
 go 1.13
 
