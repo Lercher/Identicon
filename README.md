@@ -2,7 +2,8 @@
 
 ## Introduction
 
-This is a small example of a simple identicon generator written in golang, the blog post can be found here: https://www.bartfokker.nl/posts/identicon/
+This is a small example of a simple identicon generator written in golang, the blog post can be found here:
+[https://www.bartfokker.nl/posts/identicon/](https://www.bartfokker.nl/posts/identicon/)
 
 ## go get to get the package
 
@@ -12,8 +13,8 @@ go get github.com/lercher/identicon
 
 ## This Fork
 
-This fork introduces more control over the generated png image
-and adds more contrast to the color chosen.
+This fork introduces more control over the png image generated
+and adds more contrast to the chosen color.
 
 ### Breaking Changes
 
@@ -22,11 +23,13 @@ which needs not be a string up-front.
 
 The `WriteImage` method was removed and replaced by `WritePNGImage` with more parameters.
 
-## Usage 
+## Usage
 
 ```go
 import "github.com/lercher/identicon"
 
 i := identicon.Generate([]byte("Simpson"))
-_ = i.WritePNGImage(w, pw, identicon.LightBackground(true)) 
+// 50px per identicon pixel, i.e. 250x250 image written
+// using dark colors in the byte range 0-127:
+_ = i.WritePNGImage(w, 50, identicon.LightBackground(true))
 ```
