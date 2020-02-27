@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/barthr/identicon"
+	"github.com/lercher/identicon"
 )
 
 var welcomeSignature = `
@@ -35,14 +35,14 @@ func main() {
 
 	generatedIdenticon := identicon.Generate([]byte(*name))
 
-	f, err := os.Create(generatedIdenticon.Name + ".png")
+	f, err := os.Create(*name + ".png")
 	if err != nil {
 		fmt.Printf("error: failed creating file for output png")
 		return
 	}
 	defer f.Close()
 
-	if err := generatedIdenticon.WriteImage(f); err != nil {
+	if err := generatedIdenticon.WritePNGImage(f, 50, identicon.LightBackground(true)); err != nil {
 		fmt.Printf("error failed writing image to file")
 		return
 	}

@@ -10,13 +10,9 @@ import (
 	"github.com/llgcode/draw2d/draw2dimg"
 )
 
-type point struct {
-	x, y int
-}
-
-type drawingPoint struct {
-	topLeft     point
-	bottomRight point
+// Point is 2d int/F5 coordinates
+type Point struct {
+	X, Y int
 }
 
 type gridPoint struct {
@@ -24,51 +20,23 @@ type gridPoint struct {
 	index int
 }
 
+// Identicon grphically represents a hash in a 5x5 matrix
 type Identicon struct {
 	hash       [16]byte
 	color      [3]byte
 	grid       []byte
 	gridPoints []gridPoint
-	pixelMap   []drawingPoint
+	Pixels     []Point
 }
-
-type LightBackground bool
-
-// WritePNGImage writes the identicon image to the given writer with width and height of 5 times pixwidth
-// and LightBackground(true) or LightBackground(false) as lbg
-func (i Identicon) WritePNGImage(w io.Writer, pixwidth int, lbg LightBackground) error {
-	var img = image.NewRGBA(image.Rect(0, 0, pixwidth*5, pixwidth*5))
-	var col color.RGBA
-	if bool(lbg) {
-		col = color.RGBA{R: i.color[0] & 0x8f, G: i.color[1] & 0x8f, B: i.color[2] & 0x8f, A: 255}
-	} else {
-		col = color.RGBA{R: i.color[0] | 0x80, G: i.color[1] | 0x80, B: i.color[2] | 0x80, A: 255}
-	}
-
-	for _, pixel := range i.pixelMap {
-		rect(
-			img, 
-			col, 
-			float64(pixel.topLeft.x * pixwidth), float64(pixel.topLeft.y * pixwidth), 
-			float64(pixel.bottomRight.x* pixwidth), float64(pixel.bottomRight.y* pixwidth),
-		)
-	}
-
-	return png.Encode(w, img)
-}
-
-type applyFunc func(Identicon) Identicon
 
 // Generate creates an Identicon from an arbitrary byte array.
 // It is garanteed that the same byte array produces the same Identicon.
 func Generate(input []byte) Identicon {
-	identiconPipe := []applyFunc{
-		pickColor, buildGrid, filterOddSquares, buildPixelMap,
-	}
 	identicon := hashInput(input)
-	for _, applyFunc := range identiconPipe {
-		identicon = applyFunc(identicon)
-	}
+	identicon = pickColor(identicon)
+	identicon = buildGrid(identicon)
+	identicon = filterOddSquares(identicon)
+	identicon = buildPixelMap(identicon)
 	return identicon
 }
 
@@ -88,13 +56,12 @@ func pickColor(identicon Identicon) Identicon {
 
 func buildGrid(identicon Identicon) Identicon {
 	var grid []byte
-	for i := 0; i < len(identicon.hash) && i+3 <= len(identicon.hash)-1; i += 3 {
+	for i := 0; i+3 < len(identicon.hash); i += 3 {
 		chunk := make([]byte, 5)
 		copy(chunk, identicon.hash[i:i+3])
 		chunk[3] = chunk[1]
 		chunk[4] = chunk[0]
 		grid = append(grid, chunk...)
-
 	}
 	identicon.grid = grid
 	return identicon
@@ -115,37 +82,56 @@ func filterOddSquares(identicon Identicon) Identicon {
 	return identicon
 }
 
-func rect(img *image.RGBA, col color.Color, x1, y1, x2, y2 float64) {
-	gc := draw2dimg.NewGraphicContext(img)
-	gc.SetFillColor(col)
-	gc.MoveTo(x1, y1)
-	gc.LineTo(x1, y1)
-	gc.LineTo(x1, y2)
-	gc.MoveTo(x2, y1)
-	gc.LineTo(x2, y1)
-	gc.LineTo(x2, y2)
-	gc.SetLineWidth(0)
-	gc.FillStroke()
-}
-
 func buildPixelMap(identicon Identicon) Identicon {
-	var drawingPoints []drawingPoint
+	var points []Point
 
-	pixelFunc := func(p gridPoint) drawingPoint {
+	pixelFunc := func(p gridPoint) Point {
 		horizontal := (p.index % 5)
 		vertical := (p.index / 5)
-		topLeft := point{x: horizontal, y: vertical}
-		bottomRight := point{x: horizontal + 1, y: vertical + 1}
-
-		return drawingPoint{
-			topLeft,
-			bottomRight,
-		}
+		return Point{X: horizontal, Y: vertical}
 	}
 
 	for _, gridPoint := range identicon.gridPoints {
-		drawingPoints = append(drawingPoints, pixelFunc(gridPoint))
+		points = append(points, pixelFunc(gridPoint))
 	}
-	identicon.pixelMap = drawingPoints
+	identicon.Pixels = points
 	return identicon
+}
+
+// LightBackground is either true or false
+type LightBackground bool
+
+// WritePNGImage writes the identicon image to the given writer with width and height of 5 times pixwidth
+// and LightBackground(true) or LightBackground(false) as lbg
+func (i Identicon) WritePNGImage(w io.Writer, pixwidth int, lbg LightBackground) error {
+	var img = image.NewRGBA(image.Rect(0, 0, pixwidth*5, pixwidth*5))
+	col := color.YCbCr{Y: i.color[0], Cb: i.color[1], Cr: i.color[2]}
+	if bool(lbg) {
+		col.Y &= 0x7f // reset high bit in luma
+	} else {
+		col.Y |= 0x80 // set high bit in luma
+	}
+
+	gc := draw2dimg.NewGraphicContext(img)
+	for _, pixel := range i.Pixels {
+		rect(
+			gc,
+			col,
+			float64(pixel.X*pixwidth), float64(pixel.Y*pixwidth),
+			float64(pixel.X*pixwidth+pixwidth), float64(pixel.Y*pixwidth+pixwidth),
+		)
+	}
+	gc.Close()
+	return png.Encode(w, img)
+}
+
+func rect(gc *draw2dimg.GraphicContext, col color.Color, x1, y1, x2, y2 float64) {
+	gc.SetFillColor(col)
+	gc.SetLineWidth(0)
+	gc.MoveTo(x1, y1)
+	gc.LineTo(x1, y2)
+	gc.LineTo(x2, y2)
+	gc.LineTo(x2, y1)
+	gc.LineTo(x1, y1)
+	gc.FillStroke()
 }
